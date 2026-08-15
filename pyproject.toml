@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-whatsapp"
+version = "0.1.0"
+description = "Django integration for the official Meta WhatsApp Cloud API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+dependencies = [
+    "Django>=5.2,<6.0",
+    "httpx>=0.28,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-django>=4,<5",
+    "respx>=0.22,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
