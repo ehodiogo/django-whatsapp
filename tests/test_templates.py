@@ -191,3 +191,53 @@ def test_send_template_with_image_header():
             ],
         }
     ]
+
+@respx.mock
+def test_send_template_with_text_header():
+    route = respx.post(
+        "https://graph.facebook.com/v23.0/"
+        "development-phone-number-id/messages"
+    ).mock(
+        return_value=Response(
+            200,
+            json={
+                "messaging_product": "whatsapp",
+                "messages": [
+                    {
+                        "id": "wamid.template-text-header",
+                    }
+                ],
+            },
+        )
+    )
+
+    client = WhatsAppClient()
+
+    result = client.messages.send_template(
+        to="5511999999999",
+        name="pedido",
+        language="pt_BR",
+        header=TemplateHeader.text(
+            "Pedido #12345"
+        ),
+    )
+
+    assert result.messages[0].id == (
+        "wamid.template-text-header"
+    )
+
+    payload = json.loads(
+        route.calls.last.request.content
+    )
+
+    assert payload["template"]["components"] == [
+        {
+            "type": "header",
+            "parameters": [
+                {
+                    "type": "text",
+                    "text": "Pedido #12345",
+                }
+            ],
+        }
+    ]
