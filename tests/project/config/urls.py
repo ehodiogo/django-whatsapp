@@ -1,4 +1,11 @@
-from django.urls import path
+from django.urls import include, path
 
 
-urlpatterns = []
+urlpatterns = [
+    path(
+        "whatsapp/",
+        include(
+            "django_whatsapp.webhooks.urls"
+        ),
+    ),
+]

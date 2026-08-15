@@ -34,6 +34,23 @@ USE_TZ = True
 DJANGO_WHATSAPP = {
     "ACCESS_TOKEN": env("WHATSAPP_ACCESS_TOKEN"),
     "PHONE_NUMBER_ID": env("WHATSAPP_PHONE_NUMBER_ID"),
-    "API_VERSION": env("WHATSAPP_API_VERSION", default="v23.0"),
-    "TIMEOUT": env.float("WHATSAPP_TIMEOUT", default=15.0),
+    "API_VERSION": env(
+        "WHATSAPP_API_VERSION",
+        default="v23.0",
+    ),
+    "TIMEOUT": env.float(
+        "WHATSAPP_TIMEOUT",
+        default=15.0,
+    ),
+    "WEBHOOK": {
+        "VERIFY_TOKEN": env(
+            "WHATSAPP_VERIFY_TOKEN",
+            default="development-verify-token",
+        ),
+        "APP_SECRET": env(
+            "WHATSAPP_APP_SECRET",
+            default="development-app-secret",
+        ),
+        "CONSUMERS": [],
+    },
 }
