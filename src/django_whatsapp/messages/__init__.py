@@ -1,7 +1,5 @@
-from .client import WhatsAppClient
+from .client import MessagesClient
 
 __all__ = [
-    "WhatsAppClient",
+    "MessagesClient",
 ]
-
-__version__ = "0.1.0"

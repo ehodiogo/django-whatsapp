@@ -18,13 +18,20 @@ def parse_webhook(
         for change in entry.get("changes", []):
             value = change.get("value", {})
             metadata = value.get("metadata", {})
+            contacts_list = value.get("contacts", [])
+            contacts_by_wa_id = {
+                c.get("wa_id"): c for c in contacts_list if isinstance(c, dict) and c.get("wa_id")
+            }
 
             for message in value.get("messages", []):
+                from_phone = message.get("from")
+                contact_info = contacts_by_wa_id.get(from_phone) or (contacts_list[0] if contacts_list else None)
                 events.append(
                     MessageReceived(
                         raw=payload,
                         message=message,
                         metadata=metadata,
+                        contact=contact_info,
                     )
                 )
 

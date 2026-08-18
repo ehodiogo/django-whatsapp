@@ -1,5 +1,6 @@
 from __future__ import annotations
-
+from .consumers import WebhookDispatcher
+from .registry import load_consumers
 import json
 
 from django.http import (
@@ -86,6 +87,26 @@ class WhatsAppWebhookView(View):
             )
 
         events = parse_webhook(payload)
+
+        consumers = list(
+            load_consumers(
+                config.webhook.consumers
+            )
+        )
+
+        if config.auto_save:
+            from .persistence import DatabasePersistenceConsumer
+
+            # Prepend persistence consumer so DB records are created before custom consumers run
+            if not any(isinstance(c, DatabasePersistenceConsumer) for c in consumers):
+                consumers.insert(0, DatabasePersistenceConsumer())
+
+        dispatcher = WebhookDispatcher(
+            consumers=consumers,
+        )
+
+        for event in events:
+            dispatcher.dispatch(event)
 
         return JsonResponse(
             {

@@ -28,13 +28,46 @@ class MessageReceived(WebhookEvent):
         return self.message.get("from")
 
     @property
+    def contact_name(self) -> str | None:
+        if self.contact and isinstance(self.contact.get("profile"), dict):
+            return self.contact["profile"].get("name")
+        return None
+
+    @property
+    def contact_wa_id(self) -> str | None:
+        if self.contact:
+            return self.contact.get("wa_id")
+        return None
+
+    @property
+    def timestamp(self) -> str | None:
+        return self.message.get("timestamp")
+
+    @property
     def text(self) -> str | None:
-        text = self.message.get("text")
-
-        if not text:
-            return None
-
-        return text.get("body")
+        mtype = self.message_type
+        if mtype == "text":
+            text_data = self.message.get("text")
+            if isinstance(text_data, dict):
+                return text_data.get("body")
+        elif mtype == "interactive":
+            interactive = self.message.get("interactive", {})
+            itype = interactive.get("type")
+            if itype == "button_reply":
+                return interactive.get("button_reply", {}).get("title")
+            elif itype == "list_reply":
+                return interactive.get("list_reply", {}).get("title")
+        elif mtype == "button":
+            btn = self.message.get("button", {})
+            return btn.get("text")
+        elif mtype == "reaction":
+            reaction = self.message.get("reaction", {})
+            return reaction.get("emoji")
+        elif mtype in ("image", "video", "audio", "document", "sticker"):
+            media_data = self.message.get(mtype, {})
+            if isinstance(media_data, dict):
+                return media_data.get("caption")
+        return None
 
 
 @dataclass(frozen=True)
@@ -49,6 +82,18 @@ class MessageStatusUpdated(WebhookEvent):
     @property
     def status_name(self) -> str | None:
         return self.status.get("status")
+
+    @property
+    def recipient_id(self) -> str | None:
+        return self.status.get("recipient_id")
+
+    @property
+    def timestamp(self) -> str | None:
+        return self.status.get("timestamp")
+
+    @property
+    def errors(self) -> list[dict[str, Any]]:
+        return self.status.get("errors", [])
 
 
 @dataclass(frozen=True)

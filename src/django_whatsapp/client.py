@@ -20,6 +20,7 @@ class WhatsAppClient:
         self.messages = MessagesClient(
             http=self.http,
             messages_url=self.messages_url,
+            config=self.config,
         )
 
     def _validate_config(self) -> None:

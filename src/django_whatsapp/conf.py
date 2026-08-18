@@ -12,10 +12,11 @@ class WhatsAppWebhookSettings:
 
 @dataclass(frozen=True)
 class WhatsAppSettings:
-    access_token: str
-    phone_number_id: str
+    access_token: str = ""
+    phone_number_id: str = ""
     api_version: str = "v23.0"
     timeout: float = 15.0
+    auto_save: bool = True
     webhook: WhatsAppWebhookSettings | None = None
 
     @classmethod
@@ -65,6 +66,12 @@ class WhatsAppSettings:
                 config.get(
                     "TIMEOUT",
                     15.0,
+                )
+            ),
+            auto_save=bool(
+                config.get(
+                    "AUTO_SAVE",
+                    True,
                 )
             ),
             webhook=webhook,
