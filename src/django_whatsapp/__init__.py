@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 from .client import WhatsAppClient
 
 if TYPE_CHECKING:
+    from .media.client import MediaClient
     from .models import (
         MessageDirection,
         MessageStatus,
@@ -9,6 +10,7 @@ if TYPE_CHECKING:
         WhatsAppContact,
         WhatsAppMessage,
     )
+    from .router import WhatsAppContext, WhatsAppRouter, bot, router
     from .signals import (
         contact_created,
         contact_updated,
@@ -19,11 +21,16 @@ if TYPE_CHECKING:
 
 __all__ = [
     "WhatsAppClient",
+    "MediaClient",
     "WhatsAppContact",
     "WhatsAppMessage",
     "MessageDirection",
     "MessageStatus",
     "MessageType",
+    "WhatsAppRouter",
+    "WhatsAppContext",
+    "bot",
+    "router",
     "contact_created",
     "contact_updated",
     "message_received",
@@ -55,4 +62,12 @@ def __getattr__(name: str):
         from . import signals
 
         return getattr(signals, name)
+    if name in ("WhatsAppRouter", "WhatsAppContext", "bot", "router"):
+        from . import router
+
+        return getattr(router, name)
+    if name == "MediaClient":
+        from .media.client import MediaClient
+
+        return MediaClient
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

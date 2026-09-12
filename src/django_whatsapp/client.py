@@ -3,6 +3,7 @@ from __future__ import annotations
 from .conf import WhatsAppSettings
 from .exceptions import WhatsAppConfigurationError
 from .http import MetaAPIClient
+from .media.client import MediaClient
 from .messages.client import MessagesClient
 
 
@@ -20,6 +21,11 @@ class WhatsAppClient:
         self.messages = MessagesClient(
             http=self.http,
             messages_url=self.messages_url,
+            config=self.config,
+        )
+
+        self.media = MediaClient(
+            http=self.http,
             config=self.config,
         )
 

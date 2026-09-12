@@ -121,6 +121,57 @@ class WhatsAppContact(models.Model):
             header=header,
         )
 
+    def send_image(
+        self,
+        media: str,
+        caption: str | None = None,
+        client: WhatsAppClient | None = None,
+    ) -> SendMessageResponse:
+        from .client import WhatsAppClient
+
+        active_client = client or WhatsAppClient()
+        return active_client.messages.send_image(
+            to=self.phone_number,
+            media=media,
+            caption=caption,
+        )
+
+    def send_document(
+        self,
+        media: str,
+        filename: str | None = None,
+        caption: str | None = None,
+        client: WhatsAppClient | None = None,
+    ) -> SendMessageResponse:
+        from .client import WhatsAppClient
+
+        active_client = client or WhatsAppClient()
+        return active_client.messages.send_document(
+            to=self.phone_number,
+            media=media,
+            filename=filename,
+            caption=caption,
+        )
+
+    def send_buttons(
+        self,
+        text: str,
+        buttons: list[dict[str, str]],
+        header: str | None = None,
+        footer: str | None = None,
+        client: WhatsAppClient | None = None,
+    ) -> SendMessageResponse:
+        from .client import WhatsAppClient
+
+        active_client = client or WhatsAppClient()
+        return active_client.messages.send_buttons(
+            to=self.phone_number,
+            text=text,
+            buttons=buttons,
+            header=header,
+            footer=footer,
+        )
+
 
 class WhatsAppMessage(models.Model):
     contact = models.ForeignKey(
@@ -217,3 +268,11 @@ class WhatsAppMessage(models.Model):
     def __str__(self) -> str:
         snippet = (self.body[:30] + "...") if len(self.body) > 30 else (self.body or f"[{self.message_type}]")
         return f"{self.get_direction_display()} - {self.contact.phone_number}: {snippet}"
+
+    def mark_as_read(self, client: WhatsAppClient | None = None) -> dict[str, Any]:
+        if not self.wamid:
+            return {}
+        from .client import WhatsAppClient
+
+        active_client = client or WhatsAppClient()
+        return active_client.messages.mark_as_read(self.wamid)

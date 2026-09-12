@@ -73,6 +73,20 @@ def _save_outbound_message(
         logger.warning(f"Failed to auto-save outbound WhatsApp message: {e}")
 
 
+def _build_media_object(media: str, caption: str | None = None, filename: str | None = None) -> dict[str, Any]:
+    obj: dict[str, Any] = {}
+    if media.startswith("http://") or media.startswith("https://"):
+        obj["link"] = media
+    else:
+        obj["id"] = media
+
+    if caption:
+        obj["caption"] = caption
+    if filename:
+        obj["filename"] = filename
+    return obj
+
+
 class MessagesClient:
     def __init__(
         self,
@@ -90,6 +104,17 @@ class MessagesClient:
         if self.config is not None:
             return self.config.auto_save
         return True
+
+    def mark_as_read(self, message_id: str) -> dict[str, Any]:
+        """
+        Mark an incoming message as read (blue double checkmarks in WhatsApp).
+        """
+        payload = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+        }
+        return self.http.post(self.messages_url, payload)
 
     def send_text(
         self,
@@ -141,26 +166,15 @@ class MessagesClient:
         to = normalize_phone_number(to)
 
         if not name.strip():
-            raise InvalidMessageError(
-                "Template name cannot be empty."
-            )
-
+            raise InvalidMessageError("Template name cannot be empty.")
         if not language.strip():
-            raise InvalidMessageError(
-                "Template language cannot be empty."
-            )
+            raise InvalidMessageError("Template language cannot be empty.")
 
         components = []
-
         if header is not None:
-            components.append(
-                header.to_payload()
-            )
-
+            components.append(header.to_payload())
         if body_parameters:
-            components.append(
-                build_body_component(body_parameters)
-            )
+            components.append(build_body_component(body_parameters))
 
         payload: dict[str, Any] = {
             "messaging_product": "whatsapp",
@@ -196,4 +210,332 @@ class MessagesClient:
                 response=response,
             )
 
+        return response
+
+    def send_reaction(
+        self,
+        to: str,
+        message_id: str,
+        emoji: str,
+        *,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "reaction",
+            "reaction": {
+                "message_id": message_id,
+                "emoji": emoji,
+            },
+        }
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="reaction",
+                body=emoji,
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_buttons(
+        self,
+        to: str,
+        text: str,
+        buttons: list[dict[str, str]],
+        *,
+        header: str | None = None,
+        footer: str | None = None,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        """
+        Send interactive reply buttons (up to 3 buttons).
+        Each button dict should have 'id' and 'title'.
+        """
+        to = normalize_phone_number(to)
+        if not buttons or len(buttons) > 3:
+            raise InvalidMessageError("Buttons message must have between 1 and 3 buttons.")
+
+        formatted_buttons = []
+        for btn in buttons:
+            btn_id = btn.get("id", "").strip()
+            btn_title = btn.get("title", "").strip()
+            if not btn_id or not btn_title:
+                raise InvalidMessageError("Each button must have non-empty 'id' and 'title'.")
+            formatted_buttons.append({
+                "type": "reply",
+                "reply": {
+                    "id": btn_id,
+                    "title": btn_title[:20],
+                },
+            })
+
+        interactive: dict[str, Any] = {
+            "type": "button",
+            "body": {"text": text},
+            "action": {"buttons": formatted_buttons},
+        }
+
+        if header:
+            interactive["header"] = {"type": "text", "text": header}
+        if footer:
+            interactive["footer"] = {"text": footer}
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "interactive",
+            "interactive": interactive,
+        }
+
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            btn_titles = [b.get("title", "") for b in buttons]
+            summary = f"{text} [Buttons: {', '.join(btn_titles)}]"
+            _save_outbound_message(
+                to=to,
+                message_type="interactive",
+                body=summary,
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_list(
+        self,
+        to: str,
+        text: str,
+        button_text: str,
+        sections: list[dict[str, Any]],
+        *,
+        header: str | None = None,
+        footer: str | None = None,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        """
+        Send interactive list message (dropdown menu).
+        """
+        to = normalize_phone_number(to)
+        if not sections:
+            raise InvalidMessageError("List message must have at least one section.")
+
+        interactive: dict[str, Any] = {
+            "type": "list",
+            "body": {"text": text},
+            "action": {
+                "button": button_text[:20],
+                "sections": sections,
+            },
+        }
+
+        if header:
+            interactive["header"] = {"type": "text", "text": header}
+        if footer:
+            interactive["footer"] = {"text": footer}
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "interactive",
+            "interactive": interactive,
+        }
+
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="interactive",
+                body=f"[List: {button_text}] {text}",
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_location(
+        self,
+        to: str,
+        latitude: float,
+        longitude: float,
+        *,
+        name: str | None = None,
+        address: str | None = None,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        loc_data: dict[str, Any] = {
+            "latitude": str(latitude),
+            "longitude": str(longitude),
+        }
+        if name:
+            loc_data["name"] = name
+        if address:
+            loc_data["address"] = address
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "location",
+            "location": loc_data,
+        }
+
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            desc = f"[Location] {name or f'{latitude}, {longitude}'}"
+            _save_outbound_message(
+                to=to,
+                message_type="location",
+                body=desc,
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_image(
+        self,
+        to: str,
+        media: str,
+        *,
+        caption: str | None = None,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "image",
+            "image": _build_media_object(media, caption=caption),
+        }
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="image",
+                body=caption or "[Image]",
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_document(
+        self,
+        to: str,
+        media: str,
+        *,
+        filename: str | None = None,
+        caption: str | None = None,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "document",
+            "document": _build_media_object(media, caption=caption, filename=filename),
+        }
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="document",
+                body=caption or (f"[Document: {filename}]" if filename else "[Document]"),
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_audio(
+        self,
+        to: str,
+        media: str,
+        *,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "audio",
+            "audio": _build_media_object(media),
+        }
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="audio",
+                body="[Audio]",
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_video(
+        self,
+        to: str,
+        media: str,
+        *,
+        caption: str | None = None,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "video",
+            "video": _build_media_object(media, caption=caption),
+        }
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="video",
+                body=caption or "[Video]",
+                payload=payload,
+                response=response,
+            )
+        return response
+
+    def send_sticker(
+        self,
+        to: str,
+        media: str,
+        *,
+        auto_save: bool | None = None,
+    ) -> SendMessageResponse:
+        to = normalize_phone_number(to)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "sticker",
+            "sticker": _build_media_object(media),
+        }
+        data = self.http.post(self.messages_url, payload)
+        response = parse_send_message_response(data)
+
+        if self._should_auto_save(auto_save):
+            _save_outbound_message(
+                to=to,
+                message_type="sticker",
+                body="[Sticker]",
+                payload=payload,
+                response=response,
+            )
         return response

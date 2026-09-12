@@ -55,6 +55,38 @@ class MetaAPIClient:
 
         return data
 
+    def get(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response = self.client.get(
+                url,
+                params=params,
+            )
+        except httpx.HTTPError as exc:
+            raise WhatsAppAPIError(
+                f"HTTP request failed: {exc}"
+            ) from exc
+
+        try:
+            data = response.json()
+        except ValueError:
+            data = {
+                "raw": response.text,
+            }
+
+        if not response.is_success:
+            raise WhatsAppAPIError(
+                "Meta API returned an error.",
+                status_code=response.status_code,
+                error=data.get("error"),
+                response=data,
+            )
+
+        return data
+
     def close(self) -> None:
         self.client.close()
 

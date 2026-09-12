@@ -17,6 +17,7 @@ class WhatsAppSettings:
     api_version: str = "v23.0"
     timeout: float = 15.0
     auto_save: bool = True
+    use_celery: bool = False
     webhook: WhatsAppWebhookSettings | None = None
 
     @classmethod
@@ -72,6 +73,12 @@ class WhatsAppSettings:
                 config.get(
                     "AUTO_SAVE",
                     True,
+                )
+            ),
+            use_celery=bool(
+                config.get(
+                    "USE_CELERY",
+                    False,
                 )
             ),
             webhook=webhook,

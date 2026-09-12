@@ -1,7 +1,7 @@
 from __future__ import annotations
-from .consumers import WebhookDispatcher
-from .registry import load_consumers
+
 import json
+import logging
 
 from django.http import (
     HttpRequest,
@@ -11,8 +11,10 @@ from django.http import (
 from django.views import View
 
 from ..conf import WhatsAppSettings
-from .parser import parse_webhook
+from ..tasks import process_webhook_payload, process_webhook_payload_task
 from .security import verify_signature
+
+logger = logging.getLogger(__name__)
 
 
 class WhatsAppWebhookView(View):
@@ -86,32 +88,24 @@ class WhatsAppWebhookView(View):
                 status=400,
             )
 
-        events = parse_webhook(payload)
-
-        consumers = list(
-            load_consumers(
-                config.webhook.consumers
+        # Celery asynchronous dispatch
+        if config.use_celery and process_webhook_payload_task is not None:
+            process_webhook_payload_task.delay(payload)
+            return JsonResponse(
+                {
+                    "received": True,
+                    "queued": True,
+                },
+                status=200,
             )
-        )
 
-        if config.auto_save:
-            from .persistence import DatabasePersistenceConsumer
-
-            # Prepend persistence consumer so DB records are created before custom consumers run
-            if not any(isinstance(c, DatabasePersistenceConsumer) for c in consumers):
-                consumers.insert(0, DatabasePersistenceConsumer())
-
-        dispatcher = WebhookDispatcher(
-            consumers=consumers,
-        )
-
-        for event in events:
-            dispatcher.dispatch(event)
+        # Synchronous processing
+        event_count = process_webhook_payload(payload)
 
         return JsonResponse(
             {
                 "received": True,
-                "events": len(events),
+                "events": event_count,
             },
             status=200,
         )
